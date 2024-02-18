@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
+const s3 = require('./aws-config');
 
 app.use(express.json());
 app.use(cors());
@@ -16,20 +17,32 @@ mongoose.connect(process.env.MONGO_URI);
 
 //Image Storage Engine 
 const storage = multer.diskStorage({
-    destination: './upload/images',
-    filename: (req, file, cb) => {
-      console.log(file);
-        return cb(null, `${file.fieldname}_${Date.now()}${path.extname(file.originalname)}`)
-    }
+  // ... (remove your existing destination and filename logic)
 })
-const upload = multer({storage: storage})
-app.post("/upload", upload.single('product'), (req, res) => {
-    res.json({
-        success: 1,
-        image_url: `http://localhost:4000/images/${req.file.filename}`
-    })
-})
-app.use('/images', express.static('upload/images'));
+
+const upload = multer({ storage: storage }); 
+
+app.post("/upload", upload.single('product'), async (req, res) => {
+  const file = req.file;
+
+  const params = {
+      Bucket: 'your-bucket-name', 
+      Key: file.originalname, 
+      Body: file.buffer 
+  };
+
+  try {
+      await s3.upload(params).promise(); 
+      const image_url = `https://abhay-ecommerce.s3.amazonaws.com/${file.originalname}`;
+
+      res.json({ success: 1, image_url }); 
+  } catch (error) {
+      // Handle upload errors here
+      console.error(error);
+      res.status(500).json({ success: 0, errors: "Error uploading image" }); 
+  }
+}); 
+
 
 // MiddleWare to fetch user from database
 const fetchuser = async (req, res, next) => {
